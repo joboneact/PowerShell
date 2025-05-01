@@ -2,9 +2,51 @@
 # This script retrieves Site Collection Administrators from SharePoint Online using PowerShell jobs and batching.
 # It processes site collections in batches to improve performance and manage resource utilization.
 
+# Install-Module -Name Microsoft.Online.SharePoint.PowerShell -Force
+## Install-Module -Name Microsoft.Online.SharePoint.PowerShell -Force
+Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop
+
+
+<#
+
+command shell
+CHeck .NET version
+ (Get-ItemPropertyValue -LiteralPath 'HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -Name Release) -ge 394802
+Get-ItemPropertyValue -LiteralPath 'HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -Name Release
+.NET Framework 4.8.1 	533320 	Windows 10, version 1809 and later
+.NET Framework 4.8 	528040 	Windows 10, version 1809 and later
+.NET Framework 4.7.2 	461808 	Windows 10, version 1803 and later  
+
+
+Update-Module -Name Microsoft.Online.SharePoint.PowerShell
+
+
+Could not load type 'Microsoft.SharePoint.Client.Publishing.PortalLaunch.PortalLaunchRedirectionType'
+Microsoft.Online.SharePoint.PowerShell
+
+Get-Module -ListAvailable | Where-Object { $_.Name -like "*SharePoint*" } | ForEach-Object { Remove-Module $_.Name -Force }
+
+
+If your tenant uses MFA, the Connect-SPOService cmdlet may not work as expected.
+Solution: Use the PnP PowerShell module, which supports modern authentication:
+
+##
+Install-Module -Name PnP.PowerShell -Force
+about 10 mB
+
+Reinstall
+
+Uninstall-Module -Name Microsoft.Online.SharePoint.PowerShell -AllVersions -Force
+Install-Module -Name Microsoft.Online.SharePoint.PowerShell -Force
+
+
+#>
+
 # Variables for processing
 $AdminCenterURL = "https://bartxo-admin.sharepoint.com"
-$ReportOutput = "C:\Tmp\SPO\SiteCollectionAdminsResults.csv"
+#$ReportOutput = "C:\Tmp\SPO\SiteCollectionAdminsResults.csv"
+$ReportOutput = ".\SiteCollectionAdminsResults.csv"
+
 $BatchSize = 10  # Number of sites per batch
 
 # Connect to SharePoint Online
@@ -16,7 +58,7 @@ $Sites = Get-SPOSite -Limit All
 # Split sites into batches
 # each $Batch is a group of $BatchSize sites
 # This is done to manage resource utilization and improve performance
-$SiteBatches = $Sites | ForEach-Object -Begin { $Batch = @() } -Process {
+gge$SiteBatches = $Sites | ForEach-Object -Begin { $Batch = @() } -Process {
     $Batch += $_
     if ($Batch.Count -eq $BatchSize) {
         # show batch

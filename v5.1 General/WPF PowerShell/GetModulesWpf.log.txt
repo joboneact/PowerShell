@@ -1,0 +1,18 @@
+GetModulesWpf.log.txt
+
+Wednesday, July 9, 2025 
+1:10:42 PM 
+new WPF PowerShell
+Claude Sonnet 4
+PROMPT
+create new powershell 5.1 GetModulesWpf.ps1 with wpf that gets all modules loaded.  in a wpf table, show module name, version, reference count plus the number of dlls and a column that shows if importable.
+...
+Wednesday, July 9, 2025 
+1:31:42 PM 
+at the top and right, add a "Get Info" button that retrieves more detailed about the selected module (row). and open a web page or search results.  Also many windows modules are missing.
+
+Wednesday, July 9, 2025 
+1:52:55 PM 
+add all the chat and formatting plus syntax highlighting for the code to a new GetModulesWpf.chat.md markdown file for documentatiion. add any additional details that explains intermediate or advanced concepts.
+
+

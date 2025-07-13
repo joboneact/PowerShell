@@ -1,0 +1,80 @@
+FileManagerWpf.log.txt
+
+PowerShell Extension v2025.2.0
+Copyright (c) Microsoft Corporation.
+
+https://aka.ms/vscode-powershell
+Type 'help' to get help.
+
+2025-07-13 02:27:21 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> dir
+
+    Directory: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---           7/13/2025  2:27 AM          10553 FileManagerWPF.ps1
+
+2025-07-13 02:27:37 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\file                                             
+.\file: The term '.\file' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+2025-07-13 02:27:42 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:70:14
+Line |
+  70 |              [System.Windows.MessageBox]::Show("Failed to save comment …
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+2025-07-13 02:27:45 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:70:14
+Line |
+  70 |              [System.Windows.MessageBox]::Show("Failed to save comment …
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+2025-07-13 02:29:18 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:71:14
+Line |
+  71 |              [System.Windows.MessageBox]::Show("Failed to save comment …
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+2025-07-13 02:30:11 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:75:14
+Line |
+  75 |              [System.Windows.MessageBox]::Show("Failed to save comment …
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+2025-07-13 02:32:16 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:69:14
+Line |
+  69 |              [System.Windows.MessageBox]::Show("Failed to save comment …
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+2025-07-13 02:33:49 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:69:14
+Line |
+  69 |              [System.Windows.MessageBox]::Show("Failed to save comment …
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+     |               ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Unable to find type [System.Windows.MessageBox].
+2025-07-13 02:36:20 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1  
+ParserError: C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell\FileManagerWPF.ps1:69:14
+Line |
+  69 |              [Windows.MessageBox]::Show("Failed to save comment: $($_. …
+     |               ~~~~~~~~~~~~~~~~~~
+     | Unable to find type [Windows.MessageBox].
+2025-07-13 02:37:59 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> .\FileManagerWPF.ps1  
+2025-07-13 02:40:56 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell> exit
+2025-07-13 02:45:34 PS C:\Proj\PowerShell\PowerShell v5.1\WPF PowerShell>
+
+
+
+
+
+TODO
+
+Comment not retrieving.
+Only with Short Cuts
+
+Add Up button.
+Add Reveal in Explorer button - for current selection.

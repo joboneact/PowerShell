@@ -1,0 +1,85 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Touch Files" Height="420" Width="760"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <Button x:Name="BtnAdd" Width="110" Margin="0,0,8,0">Add Files...</Button>
+            <Button x:Name="BtnTouch" Width="110" Margin="0,0,8,0" IsEnabled="False">Touch</Button>
+            <Button x:Name="BtnToggleCompression" Width="150" Margin="0,0,8,0" IsEnabled="False">Toggle Compression</Button>
+            <Button x:Name="BtnClear" Width="110" IsEnabled="False">Clear</Button>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Foreground="#666"
+                       Text="Drag files into the list or use Add Files. Touch updates Last Modified to the current time."
+                       TextWrapping="Wrap" Margin="0,0,8,0"/>
+            <CheckBox x:Name="ChkSelectAll" Grid.Column="1"
+                      Content="Select All"
+                      IsThreeState="True"
+                      VerticalAlignment="Center"/>
+        </Grid>
+
+        <Border Grid.Row="2" BorderBrush="#CCC" BorderThickness="1" Background="#FAFAFA">
+      <ListView x:Name="FileListView"
+                AllowDrop="True"
+                SelectionMode="Extended">
+        <ListView.ItemContainerStyle>
+          <Style TargetType="ListViewItem">
+            <Setter Property="IsSelected"
+                    Value="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+          </Style>
+        </ListView.ItemContainerStyle>
+        <ListView.View>
+                    <GridView>
+                        <GridViewColumn Width="70" Header="Select">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Path" Width="420">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayPath}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding FullPath}"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Last Modified" Width="160"
+                                        DisplayMemberBinding="{Binding LastModified}"/>
+                        <GridViewColumn Header="Attributes" Width="80"
+                                        DisplayMemberBinding="{Binding Attributes}"/>
+                        <GridViewColumn Header="Size" Width="100"
+                                        DisplayMemberBinding="{Binding Size}"/>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </Border>
+
+        <StatusBar Grid.Row="3" Margin="0,8,0,0">
+            <StatusBarItem>
+                <TextBlock x:Name="LblStatus" Text="Ready"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Current Time:" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="LblNow" FontWeight="Bold"/>
+                </StackPanel>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>

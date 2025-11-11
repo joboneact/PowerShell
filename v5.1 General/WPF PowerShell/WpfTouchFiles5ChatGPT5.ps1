@@ -1,8 +1,12 @@
+# WpfTouchFiles5ChatGPT5.ps1
 <#
+
+
 .SYNOPSIS
     Touch files via WPF UI with drag & drop.
 #>
 
+# Ensure the script always runs in an STA runspace so WPF can operate correctly.
 if ($Host.Runspace.ApartmentState -ne 'STA') {
     $psi = New-Object System.Diagnostics.ProcessStartInfo -Property @{
         FileName = (Get-Process -Id $PID).Path
@@ -13,8 +17,10 @@ if ($Host.Runspace.ApartmentState -ne 'STA') {
     exit
 }
 
+# Load the core WPF assemblies that provide windowing, controls, and rendering.
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 
+# Define a strongly typed data model only once per session to support two-way binding.
 if (-not ([System.Management.Automation.PSTypeName]'TouchFileItem').Type) {
     Add-Type @"
 using System;
@@ -74,6 +80,7 @@ public class TouchFileItem : INotifyPropertyChanged
 "@
 }
 
+# Convert raw byte counts into human-readable size strings (KB/MB/GB).
 function Format-Size {
     param([long]$Bytes)
     switch ($Bytes) {
@@ -84,6 +91,7 @@ function Format-Size {
     }
 }
 
+# Translate file system attributes into compact letter codes (e.g., A, R, C).
 function Get-AttributeLetters {
     param([System.IO.FileAttributes]$Attributes)
     $map = @{
@@ -99,6 +107,7 @@ function Get-AttributeLetters {
     if ($letters) { ($letters -join '') } else { 'N' }
 }
 
+# Locate and load the associated XAML definition that describes the UI layout.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $xamlPath  = Join-Path $scriptDir 'WpfTouchFiles5ChatGPT5.xaml'
 
@@ -106,6 +115,7 @@ $xamlPath  = Join-Path $scriptDir 'WpfTouchFiles5ChatGPT5.xaml'
 $reader   = New-Object System.Xml.XmlNodeReader $xaml
 $window   = [Windows.Markup.XamlReader]::Load($reader)
 
+# Cache key WPF controls for later event wiring and state updates.
 $btnAdd    = $window.FindName('BtnAdd')
 $btnTouch  = $window.FindName('BtnTouch')
 $btnToggle = $window.FindName('BtnToggleCompression')
@@ -115,8 +125,11 @@ $lblStatus = $window.FindName('LblStatus')
 $lblNow    = $window.FindName('LblNow')
 $chkSelectAll = $window.FindName('ChkSelectAll')
 
+# Flags support suppressing re-entrant events when bulk-updating selection state.
 $script:suppressSelectAllEvent = $false
 $script:bulkSelectionUpdate   = $false
+
+# Monitor item property changes so UI state stays in sync with checkbox toggles.
 $itemPropertyChangedHandler   = [System.ComponentModel.PropertyChangedEventHandler]{
     param($sender,$eventArgs)
     if ($eventArgs.PropertyName -eq 'IsSelected' -and -not $script:bulkSelectionUpdate) {
@@ -124,16 +137,20 @@ $itemPropertyChangedHandler   = [System.ComponentModel.PropertyChangedEventHandl
     }
 }
 
+# Backing collection for the ListView; supports binding and change notifications.
 $fileItems = New-Object 'System.Collections.ObjectModel.ObservableCollection[TouchFileItem]'
 $fileList.ItemsSource = $fileItems
 $collectionView = [System.Windows.Data.CollectionViewSource]::GetDefaultView($fileItems)
 
+# Convenience accessor to force bindings to refresh when data changes.
 function Refresh-View { $collectionView.Refresh() }
 
+# Return all items that have the selection checkbox enabled.
 function Get-SelectedItems {
     @($fileItems | Where-Object { $_.IsSelected })
 }
 
+# Reflect current selections in the Select All checkbox (checked / unchecked / indeterminate).
 function Sync-SelectAll {
     if (-not $chkSelectAll) { return }
     $script:suppressSelectAllEvent = $true
@@ -146,6 +163,7 @@ function Sync-SelectAll {
     $script:suppressSelectAllEvent = $false
 }
 
+# Apply the same selection state to every row, respecting bulk-update flags.
 function Set-AllSelection {
     param([bool]$Select)
     if ($fileItems.Count -eq 0) { return }
@@ -155,6 +173,7 @@ function Set-AllSelection {
     Update-UiState
 }
 
+# Update button enablement, status text, and select-all state in one place.
 function Update-UiState {
     $btnTouch.IsEnabled  = $true
     $btnToggle.IsEnabled = $true
@@ -163,6 +182,7 @@ function Update-UiState {
     Sync-SelectAll
 }
 
+# Normalize each incoming path, skip duplicates, and push new rows into the UI model.
 function Add-Files {
     param([string[]]$Paths)
     $added = 0
@@ -188,6 +208,7 @@ function Add-Files {
     Update-UiState
 }
 
+# Provide Explorer drag-over feedback so the UI reports whether dropping is permitted.
 $fileList.Add_PreviewDragOver({
     param($sender,$e)
     if ($e.Data.GetDataPresent([System.Windows.DataFormats]::FileDrop)) {
@@ -198,6 +219,7 @@ $fileList.Add_PreviewDragOver({
     $e.Handled = $true
 })
 
+# Accept dropped files and forward them into the Add-Files pipeline.
 $fileList.Add_Drop({
     param($sender,$e)
     if ($e.Data.GetDataPresent([System.Windows.DataFormats]::FileDrop)) {
@@ -207,6 +229,7 @@ $fileList.Add_Drop({
     $e.Handled = $true
 })
 
+# Push files from the OpenFileDialog into the collection, honoring multiselect.
 $btnAdd.Add_Click({
     $dlg = New-Object Microsoft.Win32.OpenFileDialog
     $dlg.Multiselect = $true
@@ -215,6 +238,7 @@ $btnAdd.Add_Click({
     }
 })
 
+# Update LastWriteTime for the currently selected rows, refreshing metadata after each write.
 $btnTouch.Add_Click({
     $selected = Get-SelectedItems
     if (-not $selected) {
@@ -236,6 +260,7 @@ $btnTouch.Add_Click({
     Update-UiState
 })
 
+# Toggle NTFS compression via compact.exe for each selected file, then refresh attributes.
 $btnToggle.Add_Click({
     $selected = Get-SelectedItems
     if (-not $selected) { return }
@@ -253,23 +278,28 @@ $btnToggle.Add_Click({
     Update-UiState
 })
 
+# Remove every entry from the collection and reset UI indicators.
 $btnClear.Add_Click({
     $fileItems.Clear()
     Update-UiState
 })
 
+# Master checkbox to select or clear all rows without affecting button enablement.
 $chkSelectAll.Add_Click({
     if ($script:suppressSelectAllEvent) { return }
     Set-AllSelection -Select ($chkSelectAll.IsChecked -eq $true)
 })
 
+# Initialize the UI to a clean state and display the initial timestamp.
 Update-UiState
 $lblNow.Text = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
 
+# Timer keeps the footer clock current while the window remains open.
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(1)
 $timer.Add_Tick({ $lblNow.Text = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') })
 $timer.Start()
 
+# Display the WPF window and tear down the timer when the dialog closes.
 try { $window.ShowDialog() | Out-Null }
 finally { $timer.Stop() }

@@ -1,7 +1,9 @@
+<!-- Root window hosting the entire Touch Files experience -->
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Touch Files" Height="420" Width="760"
         WindowStartupLocation="CenterScreen">
+    <!-- Outer layout grid divides the surface into header, helper text, content, and status bar -->
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -10,39 +12,52 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Command row with primary action buttons -->
         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <!-- Opens a file picker to add items to the list -->
             <Button x:Name="BtnAdd" Width="110" Margin="0,0,8,0">Add Files...</Button>
+            <!-- Triggers timestamp updates for selected entries -->
             <Button x:Name="BtnTouch" Width="110" Margin="0,0,8,0" IsEnabled="False">Touch</Button>
+            <!-- Toggles NTFS compression for selected entries -->
             <Button x:Name="BtnToggleCompression" Width="150" Margin="0,0,8,0" IsEnabled="False">Toggle Compression</Button>
+            <!-- Clears the entire list and resets state -->
             <Button x:Name="BtnClear" Width="110" IsEnabled="False">Clear</Button>
         </StackPanel>
 
+        <!-- Instruction row with Select All control aligned to the right -->
         <Grid Grid.Row="1" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <!-- Contextual guidance for drag/drop and button usage -->
             <TextBlock Grid.Column="0" Foreground="#666"
                        Text="Drag files into the list or use Add Files. Touch updates Last Modified to the current time."
                        TextWrapping="Wrap" Margin="0,0,8,0"/>
+            <!-- Tri-state checkbox that selects or clears every list item -->
             <CheckBox x:Name="ChkSelectAll" Grid.Column="1"
                       Content="Select All"
                       IsThreeState="True"
                       VerticalAlignment="Center"/>
         </Grid>
 
+        <!-- Bordered container around the ListView to provide visual separation -->
         <Border Grid.Row="2" BorderBrush="#CCC" BorderThickness="1" Background="#FAFAFA">
+      <!-- ListView showing the tracked files and exposing drag/drop -->
       <ListView x:Name="FileListView"
                 AllowDrop="True"
                 SelectionMode="Extended">
+        <!-- Bind container selection directly to each item's IsSelected property -->
         <ListView.ItemContainerStyle>
           <Style TargetType="ListViewItem">
             <Setter Property="IsSelected"
                     Value="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
           </Style>
         </ListView.ItemContainerStyle>
+        <!-- GridView defines the column layout for each file row -->
         <ListView.View>
                     <GridView>
+                        <!-- Checkbox column so users can opt-in/out per file -->
                         <GridViewColumn Width="70" Header="Select">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
@@ -50,6 +65,7 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
+                        <!-- Displays the full file path and exposes the tooltip for overflow -->
                         <GridViewColumn Header="Path" Width="420">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
@@ -59,10 +75,13 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
+                        <!-- Shows the last modified timestamp persisted in the filesystem -->
                         <GridViewColumn Header="Last Modified" Width="160"
                                         DisplayMemberBinding="{Binding LastModified}"/>
+                        <!-- Render the letter-based attribute summary (A, R, C, etc.) -->
                         <GridViewColumn Header="Attributes" Width="80"
                                         DisplayMemberBinding="{Binding Attributes}"/>
+                        <!-- Final column with human-readable file sizes -->
                         <GridViewColumn Header="Size" Width="100"
                                         DisplayMemberBinding="{Binding Size}"/>
                     </GridView>
@@ -70,13 +89,16 @@
             </ListView>
         </Border>
 
+        <!-- Footer status bar relaying operation feedback and current time -->
         <StatusBar Grid.Row="3" Margin="0,8,0,0">
             <StatusBarItem>
+                <!-- Dynamic text updated by the script (e.g., Ready, Added files) -->
                 <TextBlock x:Name="LblStatus" Text="Ready"/>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Current Time:" Margin="0,0,6,0"/>
+                    <!-- Clock label refreshed by timer to show current timestamp -->
                     <TextBlock x:Name="LblNow" FontWeight="Bold"/>
                 </StackPanel>
             </StatusBarItem>

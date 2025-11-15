@@ -13,16 +13,35 @@
         </Grid.RowDefinitions>
 
         <!-- Command row with primary action buttons -->
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+        <WrapPanel Margin="0,0,0,8" ItemHeight="36">
             <!-- Opens a file picker to add items to the list -->
-            <Button x:Name="BtnAdd" Width="110" Margin="0,0,8,0">Add Files...</Button>
+            <Button x:Name="BtnAdd" MinWidth="110" Margin="0,0,8,8">Add Files...</Button>
             <!-- Triggers timestamp updates for selected entries -->
-            <Button x:Name="BtnTouch" Width="110" Margin="0,0,8,0" IsEnabled="False">Touch</Button>
+            <Button x:Name="BtnTouch" MinWidth="110" Margin="0,0,8,8" IsEnabled="False">Touch</Button>
             <!-- Toggles NTFS compression for selected entries -->
-            <Button x:Name="BtnToggleCompression" Width="150" Margin="0,0,8,0" IsEnabled="False">Toggle Compression</Button>
+            <Button x:Name="BtnToggleCompression" MinWidth="150" Margin="0,0,8,8" IsEnabled="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7B5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/>
+                    <TextBlock Text="Compression"/>
+                </StackPanel>
+            </Button>
+            <!-- Toggles NTFS encryption for selected entries -->
+            <Button x:Name="BtnToggleEncryption" MinWidth="150" Margin="0,0,8,8" IsEnabled="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7B5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/>
+                    <TextBlock Text="Encryption"/>
+                </StackPanel>
+            </Button>
+            <!-- Toggles hidden attribute for selected entries -->
+            <Button x:Name="BtnToggleHidden" MinWidth="150" Margin="0,0,8,8" IsEnabled="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE7B5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/>
+                    <TextBlock Text="Hidden"/>
+                </StackPanel>
+            </Button>
             <!-- Clears the entire list and resets state -->
-            <Button x:Name="BtnClear" Width="110" IsEnabled="False">Clear</Button>
-        </StackPanel>
+            <Button x:Name="BtnClear" MinWidth="110" Margin="0,0,8,8" IsEnabled="False">Clear</Button>
+        </WrapPanel>
 
         <!-- Instruction row with Select All control aligned to the right -->
         <Grid Grid.Row="1" Margin="0,0,0,8">
@@ -66,7 +85,7 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <!-- Displays the full file path and exposes the tooltip for overflow -->
-                        <GridViewColumn Header="Path" Width="420">
+                        <GridViewColumn Header="Path">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DisplayPath}"
@@ -76,14 +95,14 @@
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <!-- Shows the last modified timestamp persisted in the filesystem -->
-                        <GridViewColumn Header="Last Modified" Width="160"
-                                        DisplayMemberBinding="{Binding LastModified}"/>
+                        <GridViewColumn Header="Last Modified"
+                                         DisplayMemberBinding="{Binding LastModified}"/>
                         <!-- Render the letter-based attribute summary (A, R, C, etc.) -->
-                        <GridViewColumn Header="Attributes" Width="80"
-                                        DisplayMemberBinding="{Binding Attributes}"/>
+                        <GridViewColumn Header="Attributes"
+                                         DisplayMemberBinding="{Binding Attributes}"/>
                         <!-- Final column with human-readable file sizes -->
-                        <GridViewColumn Header="Size" Width="100"
-                                        DisplayMemberBinding="{Binding Size}"/>
+                        <GridViewColumn Header="Size"
+                                         DisplayMemberBinding="{Binding Size}"/>
                     </GridView>
                 </ListView.View>
             </ListView>

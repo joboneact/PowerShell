@@ -6,7 +6,7 @@
     Touch files via WPF UI with drag & drop.
 #>
 
-# Ensure the script always runs in an STA runspace so WPF can operate correctly.
+# Ensure the script always runs in anSTA runspace so WPF can operate correctly.
 if ($Host.Runspace.ApartmentState -ne 'STA') {
     $psi = New-Object System.Diagnostics.ProcessStartInfo -Property @{
         FileName = (Get-Process -Id $PID).Path
@@ -100,6 +100,7 @@ function Get-AttributeLetters {
         Hidden     = 'H'
         System     = 'S'
         Compressed = 'C'
+        Encrypted  = 'E'
     }
     $letters = foreach ($entry in $map.GetEnumerator()) {
         if ($Attributes.HasFlag([System.IO.FileAttributes]::$($entry.Key))) { $entry.Value }
@@ -119,6 +120,8 @@ $window   = [Windows.Markup.XamlReader]::Load($reader)
 $btnAdd    = $window.FindName('BtnAdd')
 $btnTouch  = $window.FindName('BtnTouch')
 $btnToggle = $window.FindName('BtnToggleCompression')
+$btnEnc    = $window.FindName('BtnToggleEncryption')
+$btnHidden = $window.FindName('BtnToggleHidden')
 $btnClear  = $window.FindName('BtnClear')
 $fileList  = $window.FindName('FileListView')
 $lblStatus = $window.FindName('LblStatus')
@@ -177,6 +180,8 @@ function Set-AllSelection {
 function Update-UiState {
     $btnTouch.IsEnabled  = $true
     $btnToggle.IsEnabled = $true
+    if ($btnEnc)    { $btnEnc.IsEnabled    = $true }
+    if ($btnHidden) { $btnHidden.IsEnabled = $true }
     $btnClear.IsEnabled  = $fileItems.Count -gt 0
     $lblStatus.Text = if ($fileItems.Count) { "Files loaded: $($fileItems.Count)" } else { "Ready" }
     Sync-SelectAll
@@ -189,9 +194,14 @@ function Add-Files {
     $script:bulkSelectionUpdate = $true
     foreach ($path in $Paths) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
-        $full = (Get-Item -LiteralPath $path).FullName
+        try {
+            $info = Get-Item -LiteralPath $path -ErrorAction Stop
+        }
+        catch {
+            continue
+        }
+        $full = $info.FullName
         if ($fileItems | Where-Object { $_.FullPath -eq $full }) { continue }
-        $info = Get-Item -LiteralPath $full
         $item = New-Object TouchFileItem
         $item.FullPath     = $info.FullName
         $item.DisplayPath  = $info.FullName
@@ -268,8 +278,8 @@ $btnToggle.Add_Click({
         if (-not (Test-Path -LiteralPath $item.FullPath -PathType Leaf)) { continue }
         $file = Get-Item -LiteralPath $item.FullPath
         $isCompressed = $file.Attributes.HasFlag([System.IO.FileAttributes]::Compressed)
-        $args = if ($isCompressed) { @('/U','/I','/Q',"`"$($file.FullName)`"") } else { @('/C','/I','/Q',"`"$($file.FullName)`"") }
-        Start-Process -FilePath "$env:SystemRoot\System32\compact.exe" -ArgumentList $args -NoNewWindow -Wait | Out-Null
+        $compactArgs = if ($isCompressed) { @('/U','/I','/Q',"`"$($file.FullName)`"") } else { @('/C','/I','/Q',"`"$($file.FullName)`"") }
+        Start-Process -FilePath "$env:SystemRoot\System32\compact.exe" -ArgumentList $compactArgs -NoNewWindow -Wait | Out-Null
         $file = Get-Item -LiteralPath $item.FullPath
         $item.Attributes = Get-AttributeLetters -Attributes $file.Attributes
         $item.Size = Format-Size $file.Length
@@ -277,6 +287,45 @@ $btnToggle.Add_Click({
     $lblStatus.Text = "Toggled compression on $($selected.Count) file(s)"
     Update-UiState
 })
+# Add encryption toggle handler
+if ($btnEnc) {
+    $btnEnc.Add_Click({
+        $selected = Get-SelectedItems
+        if (-not $selected) { return }
+        foreach ($item in $selected) {
+            if (-not (Test-Path -LiteralPath $item.FullPath -PathType Leaf)) { continue }
+            $file = Get-Item -LiteralPath $item.FullPath
+            $isEncrypted = $file.Attributes.HasFlag([System.IO.FileAttributes]::Encrypted)
+            $cipherArgs = if ($isEncrypted) { @('/D', "`"$($file.FullName)`"") } else { @('/E', "`"$($file.FullName)`"") }
+            Start-Process -FilePath "$env:SystemRoot\System32\cipher.exe" -ArgumentList $cipherArgs -NoNewWindow -Wait | Out-Null
+            $file = Get-Item -LiteralPath $item.FullPath
+            $item.Attributes = Get-AttributeLetters -Attributes $file.Attributes
+        }
+        $lblStatus.Text = "Toggled encryption on $($selected.Count) file(s)"
+        Update-UiState
+    })
+}
+# Add hidden attribute toggle handler
+if ($btnHidden) {
+    $btnHidden.Add_Click({
+        $selected = Get-SelectedItems
+        if (-not $selected) { return }
+        foreach ($item in $selected) {
+            if (-not (Test-Path -LiteralPath $item.FullPath -PathType Leaf)) { continue }
+            try {
+                $currentAttributes = [System.IO.File]::GetAttributes($item.FullPath)
+                $newAttributes = $currentAttributes -bxor [System.IO.FileAttributes]::Hidden
+                [System.IO.File]::SetAttributes($item.FullPath, $newAttributes)
+                $item.Attributes = Get-AttributeLetters -Attributes $newAttributes
+            }
+            catch {
+                continue
+            }
+        }
+        $lblStatus.Text = "Toggled hidden on $($selected.Count) file(s)"
+        Update-UiState
+    })
+}
 
 # Remove every entry from the collection and reset UI indicators.
 $btnClear.Add_Click({

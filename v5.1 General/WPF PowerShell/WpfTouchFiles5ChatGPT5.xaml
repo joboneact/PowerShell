@@ -48,6 +48,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <!-- Contextual guidance for drag/drop and button usage -->
             <TextBlock Grid.Column="0" Foreground="#666"
@@ -57,6 +58,11 @@
             <CheckBox x:Name="ChkSelectAll" Grid.Column="1"
                       Content="Select All"
                       IsThreeState="True"
+                      VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <!-- Optional auto-clear toggle for drag & drop operations -->
+            <CheckBox x:Name="ChkClearOnDrop" Grid.Column="2"
+                      Content="Clear before drop"
+                      IsChecked="False"
                       VerticalAlignment="Center"/>
         </Grid>
 

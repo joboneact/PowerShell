@@ -127,6 +127,7 @@ $fileList  = $window.FindName('FileListView')
 $lblStatus = $window.FindName('LblStatus')
 $lblNow    = $window.FindName('LblNow')
 $chkSelectAll = $window.FindName('ChkSelectAll')
+$chkClearOnDrop = $window.FindName('ChkClearOnDrop')
 
 # Flags support suppressing re-entrant events when bulk-updating selection state.
 $script:suppressSelectAllEvent = $false
@@ -233,6 +234,10 @@ $fileList.Add_PreviewDragOver({
 $fileList.Add_Drop({
     param($sender,$e)
     if ($e.Data.GetDataPresent([System.Windows.DataFormats]::FileDrop)) {
+        if ($chkClearOnDrop -and $chkClearOnDrop.IsChecked -eq $true) {
+            $fileItems.Clear()
+            Update-UiState
+        }
         $files = $e.Data.GetData([System.Windows.DataFormats]::FileDrop)
         Add-Files -Paths $files
     }

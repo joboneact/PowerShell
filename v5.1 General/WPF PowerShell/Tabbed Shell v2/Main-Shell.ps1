@@ -69,9 +69,17 @@ $Global:ShellContext = [PSCustomObject]@{
         Danger      = "#F38BA8"
         Success     = "#A6E3A1"
     }
-    Window      = $null
-    TabControl  = $null
-    StatusBar   = $null
+    Window          = $null
+    TabControl      = $null
+    StatusBar       = $null
+    CommonInfo      = $null
+    DiagnosticsBox  = $null
+    CommonSettings  = [PSCustomObject]@{
+        OutputCopyFormat = "Text"
+        AvailableFormats  = @("Text","PSObject","JSON","Markdown","HTML")
+        Mode             = "Dark"
+    }
+    SetCommonSetting = $null
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -110,6 +118,92 @@ function Read-ModuleMetadata {
     catch { <# unreadable file — use defaults #> }
 
     return [PSCustomObject]$meta
+}
+
+# ─────────────────────────────────────────────────────────────
+# STATUS HELPER
+# ─────────────────────────────────────────────────────────────
+function Set-Status {
+    param([string]$Msg, [string]$Color = "#7F849C")
+    $TxtStatus.Text       = $Msg
+    $TxtStatus.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+}
+
+function Set-Theme {
+    param([string]$Mode)
+
+    if ($Mode -eq 'Light') {
+        $Global:ShellContext.Theme.Background  = '#F5F5F5'
+        $Global:ShellContext.Theme.Surface     = '#FFFFFF'
+        $Global:ShellContext.Theme.Accent      = '#2563EB'
+        $Global:ShellContext.Theme.AccentHover = '#60A5FA'
+        $Global:ShellContext.Theme.Text        = '#111827'
+        $Global:ShellContext.Theme.TextMuted   = '#6B7280'
+        $Global:ShellContext.Theme.Border      = '#D1D5DB'
+        $Global:ShellContext.Theme.Danger      = '#DC2626'
+        $Global:ShellContext.Theme.Success     = '#16A34A'
+    }
+    else {
+        $Global:ShellContext.Theme.Background  = '#1E1E2E'
+        $Global:ShellContext.Theme.Surface     = '#2A2A3E'
+        $Global:ShellContext.Theme.Accent      = '#7C6AF7'
+        $Global:ShellContext.Theme.AccentHover = '#9D8FFF'
+        $Global:ShellContext.Theme.Text        = '#CDD6F4'
+        $Global:ShellContext.Theme.TextMuted   = '#7F849C'
+        $Global:ShellContext.Theme.Border      = '#45475A'
+        $Global:ShellContext.Theme.Danger      = '#F38BA8'
+        $Global:ShellContext.Theme.Success     = '#A6E3A1'
+    }
+
+    if ($Window) {
+        $Window.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Background)
+    }
+    if ($HeaderBar) {
+        $HeaderBar.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Surface)
+    }
+    if ($FooterBar) {
+        $FooterBar.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Surface)
+    }
+    if ($TxtStatus) {
+        $TxtStatus.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.TextMuted)
+    }
+    if ($TxtCommonInfo) {
+        $TxtCommonInfo.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Text)
+    }
+    if ($TxtDiagnostics) {
+        $TxtDiagnostics.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Text)
+        $TxtDiagnostics.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Surface)
+        $TxtDiagnostics.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Border)
+    }
+    if ($BtnThemeToggle) {
+        $BtnThemeToggle.Content = if ($Mode -eq 'Dark') { '☀ Light' } else { '🌙 Dark' }
+    }
+}
+
+function Set-CommonSetting {
+    param(
+        [string]$Name,
+        [object]$Value
+    )
+
+    switch ($Name) {
+        "OutputCopyFormat" {
+            $Global:ShellContext.CommonSettings.OutputCopyFormat = $Value
+            $TxtCommonInfo.Text = "Selected format: $Value"
+            Set-Status "Copy format set to $Value" "#A6E3A1"
+            return
+        }
+        "Mode" {
+            $Global:ShellContext.CommonSettings.Mode = $Value
+            Set-Theme -Mode $Value
+            Set-Status "Mode switched to $Value" "#A6E3A1"
+            return
+        }
+        default {
+            $Global:ShellContext.CommonSettings.$Name = $Value
+            return
+        }
+    }
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -280,7 +374,7 @@ function Get-SortedModuleList {
   <DockPanel LastChildFill="True">
 
     <!-- Title bar -->
-    <Border DockPanel.Dock="Top" Background="#16161E"
+    <Border x:Name="HeaderBar" DockPanel.Dock="Top" Background="#16161E"
             BorderBrush="#45475A" BorderThickness="0,0,0,1" Padding="16,9">
       <DockPanel>
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
@@ -294,6 +388,9 @@ function Get-SortedModuleList {
           <Button x:Name="BtnReload" Style="{StaticResource ShellButton}"
                   Content="↺  Reload" Margin="0,0,8,0"
                   ToolTip="Re-scan modules folder and reload all tabs"/>
+          <Button x:Name="BtnThemeToggle" Style="{StaticResource ShellButton}"
+                  Background="#2A2A3E" Content="☀ Light" Margin="0,0,8,0"
+                  ToolTip="Toggle light/dark mode"/>
           <Button x:Name="BtnAddFile" Style="{StaticResource ShellButton}"
                   Background="#2A2A3E" Content="＋  Add tab"/>
         </StackPanel>
@@ -304,17 +401,56 @@ function Get-SortedModuleList {
       </DockPanel>
     </Border>
 
-    <!-- Status bar -->
-    <Border DockPanel.Dock="Bottom" Background="#16161E"
-            BorderBrush="#45475A" BorderThickness="0,1,0,0" Padding="16,4">
-      <DockPanel>
-        <TextBlock x:Name="TxtStatus"
+    <!-- Status bar + common info pane -->
+    <Border x:Name="FooterBar" DockPanel.Dock="Bottom" Background="#16161E"
+            BorderBrush="#45475A" BorderThickness="0,1,0,0" Padding="16,8">
+      <StackPanel>
+        <DockPanel Margin="0,0,0,6">
+          <TextBlock x:Name="TxtStatus"
+                     Foreground="#7F849C" FontSize="11"
+                     VerticalAlignment="Center" Text="Ready"/>
+          <TextBlock x:Name="TxtTabCount" DockPanel.Dock="Right"
+                     Foreground="#7F849C" FontSize="11"
+                     HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </DockPanel>
+        <WrapPanel VerticalAlignment="Center">
+          <TextBlock Text="Copy format:" Foreground="#CDD6F4" FontSize="11"
+                     VerticalAlignment="Center" Margin="0,0,10,0"/>
+          <RadioButton x:Name="RbFormatText" GroupName="ClipboardFormat"
+                       Content="Text" Foreground="#CDD6F4" FontSize="11"
+                       IsChecked="True" Margin="0,0,8,0"/>
+          <RadioButton x:Name="RbFormatPSObject" GroupName="ClipboardFormat"
+                       Content="PSObject" Foreground="#CDD6F4" FontSize="11"
+                       Margin="0,0,8,0"/>
+          <RadioButton x:Name="RbFormatJSON" GroupName="ClipboardFormat"
+                       Content="JSON" Foreground="#CDD6F4" FontSize="11"
+                       Margin="0,0,8,0"/>
+          <RadioButton x:Name="RbFormatMarkdown" GroupName="ClipboardFormat"
+                       Content="Markdown" Foreground="#CDD6F4" FontSize="11"
+                       Margin="0,0,8,0"/>
+          <RadioButton x:Name="RbFormatHTML" GroupName="ClipboardFormat"
+                       Content="HTML" Foreground="#CDD6F4" FontSize="11"/>
+        </WrapPanel>
+        <TextBlock x:Name="TxtCommonInfo"
                    Foreground="#7F849C" FontSize="11"
-                   VerticalAlignment="Center" Text="Ready"/>
-        <TextBlock x:Name="TxtTabCount" DockPanel.Dock="Right"
-                   Foreground="#7F849C" FontSize="11"
-                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
-      </DockPanel>
+                   Margin="0,6,0,0"
+                   Text="Selected format: Text"/>
+        <TextBlock Text="Diagnostics:" Foreground="#CDD6F4" FontSize="11"
+                   Margin="0,10,0,4"/>
+        <TextBox x:Name="TxtDiagnostics"
+                 Height="80"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Disabled"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 Foreground="#CDD6F4"
+                 Background="#16161E"
+                 BorderBrush="#45475A"
+                 BorderThickness="1"
+                 FontSize="11"
+                 Margin="0,0,0,0"/>
+      </StackPanel>
     </Border>
 
     <TabControl x:Name="MainTabControl"
@@ -326,22 +462,44 @@ function Get-SortedModuleList {
 $Reader = [System.Xml.XmlNodeReader]::new($ShellXaml)
 $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
-$TabControl  = $Window.FindName("MainTabControl")
-$TxtStatus   = $Window.FindName("TxtStatus")
-$TxtTabCount = $Window.FindName("TxtTabCount")
-$TxtClock    = $Window.FindName("TxtClock")
+$TabControl    = $Window.FindName("MainTabControl")
+$TxtStatus     = $Window.FindName("TxtStatus")
+$TxtTabCount   = $Window.FindName("TxtTabCount")
+$TxtClock      = $Window.FindName("TxtClock")
+$TxtCommonInfo = $Window.FindName("TxtCommonInfo")
+$TxtDiagnostics = $Window.FindName("TxtDiagnostics")
+$HeaderBar     = $Window.FindName("HeaderBar")
+$FooterBar     = $Window.FindName("FooterBar")
 
-$Global:ShellContext.Window     = $Window
-$Global:ShellContext.TabControl = $TabControl
-$Global:ShellContext.StatusBar  = $TxtStatus
+$RbFormatText    = $Window.FindName("RbFormatText")
+$RbFormatPSObject= $Window.FindName("RbFormatPSObject")
+$RbFormatJSON    = $Window.FindName("RbFormatJSON")
+$RbFormatMarkdown= $Window.FindName("RbFormatMarkdown")
+$RbFormatHTML    = $Window.FindName("RbFormatHTML")
+$BtnThemeToggle  = $Window.FindName("BtnThemeToggle")
 
-# ─────────────────────────────────────────────────────────────
-# STATUS HELPER
-# ─────────────────────────────────────────────────────────────
-function Set-Status {
-    param([string]$Msg, [string]$Color = "#7F849C")
-    $TxtStatus.Text       = $Msg
-    $TxtStatus.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+$Global:ShellContext.Window      = $Window
+$Global:ShellContext.TabControl  = $TabControl
+$Global:ShellContext.StatusBar   = $TxtStatus
+$Global:ShellContext.CommonInfo  = $TxtCommonInfo
+$Global:ShellContext.DiagnosticsBox = $TxtDiagnostics
+
+Set-Theme -Mode $Global:ShellContext.CommonSettings.Mode
+
+$RbFormatText.Add_Checked({ if ($RbFormatText.IsChecked)    { Set-CommonSetting -Name 'OutputCopyFormat' -Value 'Text' } })
+$RbFormatPSObject.Add_Checked({ if ($RbFormatPSObject.IsChecked){ Set-CommonSetting -Name 'OutputCopyFormat' -Value 'PSObject' } })
+$RbFormatJSON.Add_Checked({ if ($RbFormatJSON.IsChecked)    { Set-CommonSetting -Name 'OutputCopyFormat' -Value 'JSON' } })
+$RbFormatMarkdown.Add_Checked({ if ($RbFormatMarkdown.IsChecked){ Set-CommonSetting -Name 'OutputCopyFormat' -Value 'Markdown' } })
+$RbFormatHTML.Add_Checked({ if ($RbFormatHTML.IsChecked)    { Set-CommonSetting -Name 'OutputCopyFormat' -Value 'HTML' } })
+
+$BtnThemeToggle.Add_Click({
+    $newMode = if ($Global:ShellContext.CommonSettings.Mode -eq 'Dark') { 'Light' } else { 'Dark' }
+    Set-CommonSetting -Name 'Mode' -Value $newMode
+})
+
+$Global:ShellContext.SetCommonSetting = {
+    param($Name, $Value)
+    Set-CommonSetting -Name $Name -Value $Value
 }
 
 # ─────────────────────────────────────────────────────────────

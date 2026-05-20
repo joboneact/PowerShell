@@ -74,7 +74,18 @@ function Get-ModuleUI {
                       FontSize="12">
                 <ListView.View>
                     <GridView>
-                        <GridViewColumn Header="Name"       Width="260" DisplayMemberBinding="{Binding Name}"/>
+                        <GridViewColumn Header=""          Width="34">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Icon}"
+                                               FontFamily="Segoe UI Emoji"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Name"       Width="226" DisplayMemberBinding="{Binding Name}"/>
                         <GridViewColumn Header="Type"       Width="80"  DisplayMemberBinding="{Binding Type}"/>
                         <GridViewColumn Header="Size"       Width="90"  DisplayMemberBinding="{Binding Size}"/>
                         <GridViewColumn Header="Modified"   Width="150" DisplayMemberBinding="{Binding Modified}"/>
@@ -111,7 +122,8 @@ function Get-ModuleUI {
                     else { "$($Item.Length) B" }
                 }
                 [void]$FileList.Items.Add([PSCustomObject]@{
-                    Name     = ("$(if($Item.PSIsContainer){'📁 '}else{'📄 '})") + $Item.Name
+                    Icon     = if ($Item.PSIsContainer) { '📁' } else { '📄' }
+                    Name     = $Item.Name
                     Type     = if ($Item.PSIsContainer) { "Folder" } else { $Item.Extension }
                     Size     = $Size
                     Modified = $Item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")

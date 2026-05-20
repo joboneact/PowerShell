@@ -55,6 +55,48 @@ function Get-ModuleUI {
                            TextWrapping="Wrap"/>
             </Border>
 
+            <TextBlock Text="Networking"
+                       FontSize="14" FontWeight="SemiBold"
+                       Foreground="$($Theme.Text)"
+                       Margin="0,18,0,10"/>
+            <Border Background="$($Theme.Surface)"
+                    CornerRadius="6"
+                    Padding="16"
+                    Margin="0,0,0,16">
+                <TextBox x:Name="TxtNetworking"
+                         Foreground="$($Theme.Text)"
+                         Background="Transparent"
+                         FontFamily="Consolas"
+                         FontSize="12"
+                         TextWrapping="Wrap"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         BorderThickness="0"
+                         VerticalScrollBarVisibility="Auto"
+                         Height="170"/>
+            </Border>
+
+            <TextBlock Text="Top Processes (CPU/Memory)"
+                       FontSize="14" FontWeight="SemiBold"
+                       Foreground="$($Theme.Text)"
+                       Margin="0,0,0,10"/>
+            <Border Background="$($Theme.Surface)"
+                    CornerRadius="6"
+                    Padding="16">
+                <TextBox x:Name="TxtProcesses"
+                         Foreground="$($Theme.Text)"
+                         Background="Transparent"
+                         FontFamily="Consolas"
+                         FontSize="12"
+                         TextWrapping="NoWrap"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         BorderThickness="0"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         Height="260"/>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>
@@ -66,6 +108,8 @@ function Get-ModuleUI {
     $StatsPanel  = $Control.FindName("StatsPanel")
     $TxtSubhead  = $Control.FindName("TxtSubhead")
     $TxtSnapshot = $Control.FindName("TxtSnapshot")
+    $TxtNetworking = $Control.FindName("TxtNetworking")
+    $TxtProcesses = $Control.FindName("TxtProcesses")
 
     # ── Build a stat card helper ──────────────
     function New-StatCard {
@@ -114,24 +158,69 @@ function Get-ModuleUI {
     $Uptime  = (Get-Date) - [System.Diagnostics.Process]::GetCurrentProcess().StartTime
     $CPU     = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue |
                 Select-Object -First 1).Name
+    $CPUCores = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue |
+                 Select-Object -First 1).NumberOfCores
+    $CPULogical = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue |
+                   Select-Object -First 1).NumberOfLogicalProcessors
     $RAM     = [math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).TotalPhysicalMemory / 1GB, 1)
     $FreeRAM = [math]::Round((Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).FreePhysicalMemory / 1MB, 1)
 
-    $TxtSubhead.Text = "Host: $Machine  ·  User: $User  ·  PowerShell $PSVer"
+    $TxtSubhead.Text = "Host: $Machine | User: $User | PowerShell $PSVer"
 
     # Cards
-    [void]$StatsPanel.Children.Add((New-StatCard -Label "Total RAM"   -Value "${RAM} GB"  -Icon "🧠" -Color $Theme.Accent))
-    [void]$StatsPanel.Children.Add((New-StatCard -Label "Free RAM"    -Value "${FreeRAM} GB" -Icon "💾" -Color $Theme.Success))
-    [void]$StatsPanel.Children.Add((New-StatCard -Label "PS Version"  -Value $PSVer        -Icon "⚡" -Color $Theme.AccentHover))
-    [void]$StatsPanel.Children.Add((New-StatCard -Label "Shell PID"   -Value $PID          -Icon "🔢" -Color $Theme.TextMuted))
+    [void]$StatsPanel.Children.Add((New-StatCard -Label "Total RAM"   -Value "${RAM} GB"  -Icon "RAM" -Color $Theme.Accent))
+    [void]$StatsPanel.Children.Add((New-StatCard -Label "Free RAM"    -Value "${FreeRAM} GB" -Icon "FREE" -Color $Theme.Success))
+    [void]$StatsPanel.Children.Add((New-StatCard -Label "PS Version"  -Value $PSVer        -Icon "PS" -Color $Theme.AccentHover))
+    [void]$StatsPanel.Children.Add((New-StatCard -Label "Shell PID"   -Value $PID          -Icon "PID" -Color $Theme.TextMuted))
 
-    $TxtSnapshot.Text = @"
-OS       : $OS
-Machine  : $Machine
-User     : $User
-CPU      : $CPU
-RAM      : $RAM GB total  /  $FreeRAM GB free
-"@
+    $TxtSnapshot.Text = @(
+        "OS       : $OS"
+        "Machine  : $Machine"
+        "User     : $User"
+        "CPU      : $CPU"
+        "CPU Core : $CPUCores physical / $CPULogical logical"
+        "RAM      : $RAM GB total  /  $FreeRAM GB free"
+    ) -join [Environment]::NewLine
+
+    $netLines = [System.Collections.Generic.List[string]]::new()
+    try {
+        $cfgs = Get-NetIPConfiguration -ErrorAction Stop | Where-Object { $_.NetAdapter.Status -eq 'Up' }
+        foreach ($cfg in $cfgs) {
+            $ips = @($cfg.IPv4Address | ForEach-Object { $_.IPAddress })
+            $dns = @($cfg.DnsServer.ServerAddresses)
+            $gw = @($cfg.IPv4DefaultGateway | ForEach-Object { $_.NextHop })
+            [void]$netLines.Add("Adapter : $($cfg.InterfaceAlias)")
+            [void]$netLines.Add("  IPv4  : $(if ($ips) { $ips -join ', ' } else { 'None' })")
+            [void]$netLines.Add("  GW    : $(if ($gw) { $gw -join ', ' } else { 'None' })")
+            [void]$netLines.Add("  DNS   : $(if ($dns) { $dns -join ', ' } else { 'None' })")
+            [void]$netLines.Add("")
+        }
+    }
+    catch {
+        $legacyCfg = Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue |
+                     Where-Object { $_.IPEnabled }
+        foreach ($cfg in $legacyCfg) {
+            [void]$netLines.Add("Adapter : $($cfg.Description)")
+            [void]$netLines.Add("  IPv4  : $(if ($cfg.IPAddress) { ($cfg.IPAddress -join ', ') } else { 'None' })")
+            [void]$netLines.Add("  GW    : $(if ($cfg.DefaultIPGateway) { ($cfg.DefaultIPGateway -join ', ') } else { 'None' })")
+            [void]$netLines.Add("  DNS   : $(if ($cfg.DNSServerSearchOrder) { ($cfg.DNSServerSearchOrder -join ', ') } else { 'None' })")
+            [void]$netLines.Add("")
+        }
+    }
+    $TxtNetworking.Text = if ($netLines.Count -gt 0) { ($netLines -join [Environment]::NewLine).TrimEnd() } else { 'No active network details found.' }
+
+    $processLines = [System.Collections.Generic.List[string]]::new()
+    [void]$processLines.Add(('Name'.PadRight(30) + 'PID'.PadLeft(8) + ' CPU(s)'.PadLeft(12) + ' WorkingSet(MB)'.PadLeft(18)))
+    [void]$processLines.Add('-' * 70)
+    $topByMemory = Get-Process -ErrorAction SilentlyContinue |
+                   Sort-Object WorkingSet -Descending |
+                   Select-Object -First 20
+    foreach ($p in $topByMemory) {
+        $cpuVal = if ($null -ne $p.CPU) { ('{0:N1}' -f $p.CPU) } else { 'n/a' }
+        $memVal = '{0:N1}' -f ($p.WorkingSet64 / 1MB)
+        [void]$processLines.Add($p.ProcessName.PadRight(30).Substring(0,30) + $p.Id.ToString().PadLeft(8) + $cpuVal.PadLeft(12) + $memVal.PadLeft(18))
+    }
+    $TxtProcesses.Text = $processLines -join [Environment]::NewLine
 
     return $Control
 }

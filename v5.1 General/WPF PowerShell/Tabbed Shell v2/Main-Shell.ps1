@@ -74,6 +74,7 @@ $Global:ShellContext = [PSCustomObject]@{
     StatusBar       = $null
     CommonInfo      = $null
     DiagnosticsBox  = $null
+    CopyToClipboard = $null
     CommonSettings  = [PSCustomObject]@{
         OutputCopyFormat = "Text"
         AvailableFormats  = @("Text","PSObject","JSON","Markdown","HTML")
@@ -176,7 +177,7 @@ function Set-Theme {
         $TxtDiagnostics.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Global:ShellContext.Theme.Border)
     }
     if ($BtnThemeToggle) {
-        $BtnThemeToggle.Content = if ($Mode -eq 'Dark') { '☀ Light' } else { '🌙 Dark' }
+        $BtnThemeToggle.Content = if ($Mode -eq 'Dark') { '🌞 Light' } else { '🌙 Dark' }
     }
 }
 
@@ -204,6 +205,124 @@ function Set-CommonSetting {
             return
         }
     }
+}
+
+function Get-ClipboardTimestamp {
+    $now = Get-Date
+    $tz = [TimeZoneInfo]::Local
+    return "{0} ({1} | {2})" -f $now.ToString('dddd, yyyy-MM-dd HH:mm:ss zzz'), $tz.Id, $tz.DisplayName
+}
+
+function ConvertTo-ShellClipboardText {
+    param(
+        [string]$Title,
+        [object]$Data,
+        [string]$Format,
+        [string]$Timestamp,
+        [string]$Source = 'Shell'
+    )
+
+    $bodyText = ''
+    if ($Data -is [string]) {
+        $bodyText = $Data
+    }
+    elseif ($null -eq $Data) {
+        $bodyText = ''
+    }
+    else {
+        $items = @($Data)
+        if ($items.Count -gt 1) {
+            $bodyText = $items | Format-Table -AutoSize | Out-String -Width 4096
+        }
+        elseif ($items.Count -eq 1) {
+            $bodyText = $items[0] | Format-List * | Out-String -Width 4096
+        }
+    }
+
+    switch ($Format) {
+        'JSON' {
+            $payload = [ordered]@{
+                Title     = $Title
+                Source    = $Source
+                Timestamp = $Timestamp
+                Data      = $Data
+            }
+            return $payload | ConvertTo-Json -Depth 12
+        }
+        'PSObject' {
+            $payload = [PSCustomObject]@{
+                Title     = $Title
+                Source    = $Source
+                Timestamp = $Timestamp
+                Data      = $Data
+            }
+            return $payload | Format-List * | Out-String -Width 4096
+        }
+        'Markdown' {
+            $safeBody = if ([string]::IsNullOrWhiteSpace($bodyText)) { '_No content_' } else { @('```text', $bodyText.TrimEnd(), '```') -join [Environment]::NewLine }
+            return @(
+                "# $Title"
+                ""
+                "- Source: $Source"
+                "- Timestamp: $Timestamp"
+                ""
+                "## Data"
+                $safeBody
+            ) -join [Environment]::NewLine
+        }
+        'HTML' {
+            $safeTitle = [System.Security.SecurityElement]::Escape($Title)
+            $safeSource = [System.Security.SecurityElement]::Escape($Source)
+            $safeTimestamp = [System.Security.SecurityElement]::Escape($Timestamp)
+
+            if ($Data -is [string] -or $null -eq $Data) {
+                $safeBody = [System.Security.SecurityElement]::Escape([string]$bodyText)
+                return @"
+<html><body>
+<h1>$safeTitle</h1>
+<p><strong>Source:</strong> $safeSource<br/>
+<strong>Timestamp:</strong> $safeTimestamp</p>
+<pre>$safeBody</pre>
+</body></html>
+"@
+            }
+
+            $table = @($Data) | ConvertTo-Html -Fragment
+            return @"
+<html><body>
+<h1>$safeTitle</h1>
+<p><strong>Source:</strong> $safeSource<br/>
+<strong>Timestamp:</strong> $safeTimestamp</p>
+$table
+</body></html>
+"@
+        }
+        default {
+            return @(
+                "Title: $Title"
+                "Source: $Source"
+                "Timestamp: $Timestamp"
+                ""
+                ($bodyText.TrimEnd())
+            ) -join [Environment]::NewLine
+        }
+    }
+}
+
+function Copy-ShellDataToClipboard {
+    param(
+        [string]$Title,
+        [object]$Data,
+        [string]$Source = 'Shell'
+    )
+
+    $format = $Global:ShellContext.CommonSettings.OutputCopyFormat
+    $timestamp = Get-ClipboardTimestamp
+    $text = ConvertTo-ShellClipboardText -Title $Title -Data $Data -Format $format -Timestamp $timestamp -Source $Source
+
+    Set-Clipboard -Value $text
+    $TxtCommonInfo.Text = "Copied '$Title' as $format at $timestamp"
+    Set-Status "Copied $Title to clipboard" "#A6E3A1"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -378,7 +497,7 @@ function Get-SortedModuleList {
             BorderBrush="#45475A" BorderThickness="0,0,0,1" Padding="16,9">
       <DockPanel>
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-          <TextBlock Text="⬡" Foreground="#7C6AF7" FontSize="18"
+          <TextBlock Text="🧩" FontFamily="Segoe UI Emoji" Foreground="#7C6AF7" FontSize="18"
                      VerticalAlignment="Center" Margin="0,0,8,0"/>
           <TextBlock Text="PowerShell WPF Shell" FontWeight="SemiBold"
                      Foreground="#CDD6F4" FontSize="14" VerticalAlignment="Center"/>
@@ -386,13 +505,13 @@ function Get-SortedModuleList {
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
                     HorizontalAlignment="Right">
           <Button x:Name="BtnReload" Style="{StaticResource ShellButton}"
-                  Content="↺  Reload" Margin="0,0,8,0"
+              Content="🔄  Reload" Margin="0,0,8,0"
                   ToolTip="Re-scan modules folder and reload all tabs"/>
           <Button x:Name="BtnThemeToggle" Style="{StaticResource ShellButton}"
-                  Background="#2A2A3E" Content="☀ Light" Margin="0,0,8,0"
+              Background="#2A2A3E" Content="🌞 Light" Margin="0,0,8,0"
                   ToolTip="Toggle light/dark mode"/>
           <Button x:Name="BtnAddFile" Style="{StaticResource ShellButton}"
-                  Background="#2A2A3E" Content="＋  Add tab"/>
+              Background="#2A2A3E" Content="➕  Add tab"/>
         </StackPanel>
         <TextBlock x:Name="TxtClock" DockPanel.Dock="Right"
                    Foreground="#7F849C" FontSize="11"
@@ -435,8 +554,19 @@ function Get-SortedModuleList {
                    Foreground="#7F849C" FontSize="11"
                    Margin="0,6,0,0"
                    Text="Selected format: Text"/>
-        <TextBlock Text="Diagnostics:" Foreground="#CDD6F4" FontSize="11"
-                   Margin="0,10,0,4"/>
+        <DockPanel Margin="0,10,0,4">
+          <TextBlock Text="Diagnostics:" Foreground="#CDD6F4" FontSize="11"
+                 VerticalAlignment="Center"/>
+          <Button x:Name="BtnCopyDiagnostics"
+              Content="Copy"
+              DockPanel.Dock="Right"
+              Padding="10,2"
+              Background="#2A2A3E"
+              Foreground="#CDD6F4"
+              BorderThickness="0"
+              FontSize="11"
+              Cursor="Hand"/>
+        </DockPanel>
         <TextBox x:Name="TxtDiagnostics"
                  Height="80"
                  TextWrapping="Wrap"
@@ -468,6 +598,7 @@ $TxtTabCount   = $Window.FindName("TxtTabCount")
 $TxtClock      = $Window.FindName("TxtClock")
 $TxtCommonInfo = $Window.FindName("TxtCommonInfo")
 $TxtDiagnostics = $Window.FindName("TxtDiagnostics")
+$BtnCopyDiagnostics = $Window.FindName("BtnCopyDiagnostics")
 $HeaderBar     = $Window.FindName("HeaderBar")
 $FooterBar     = $Window.FindName("FooterBar")
 
@@ -502,6 +633,15 @@ $Global:ShellContext.SetCommonSetting = {
     Set-CommonSetting -Name $Name -Value $Value
 }
 
+$Global:ShellContext.CopyToClipboard = {
+    param($Title, $Data, $Source)
+    Copy-ShellDataToClipboard -Title $Title -Data $Data -Source $Source
+}
+
+$BtnCopyDiagnostics.Add_Click({
+    Copy-ShellDataToClipboard -Title 'Diagnostics' -Data $TxtDiagnostics.Text -Source 'Main Shell'
+})
+
 # ─────────────────────────────────────────────────────────────
 # ORDER SYNC  — reads current tab positions → writes JSON
 # ─────────────────────────────────────────────────────────────
@@ -530,6 +670,7 @@ function New-TabHeader {
     $iconTxt        = [System.Windows.Controls.TextBlock]::new()
     $iconTxt.Text   = $Meta.Icon
     $iconTxt.Margin = [System.Windows.Thickness]::new(0, 0, 6, 0)
+    $iconTxt.FontFamily = [System.Windows.Media.FontFamily]::new('Segoe UI Emoji')
     [void]$panel.Children.Add($iconTxt)
 
     $titleTxt      = [System.Windows.Controls.TextBlock]::new()
@@ -564,6 +705,8 @@ function New-TabHeader {
 # ─────────────────────────────────────────────────────────────
 $Script:DragSource     = $null
 $Script:DragLastTarget = $null
+$Script:DragStartPoint = $null
+$Script:DragInProgress = $false
 
 function Add-DragHandlers {
     param([System.Windows.Controls.TabItem]$Tab)
@@ -571,25 +714,40 @@ function Add-DragHandlers {
     # Record the tab that had its mouse button pressed
     $Tab.Add_PreviewMouseLeftButtonDown({
         param($s, $e)
+        if ($e.OriginalSource -is [System.Windows.Controls.Button]) {
+            $Script:DragSource = $null
+            $Script:DragStartPoint = $null
+            return
+        }
         $Script:DragSource = $s
+        $Script:DragStartPoint = $e.GetPosition($Window)
     })
 
     $Tab.Add_PreviewMouseLeftButtonUp({
         $Script:DragSource = $null
+        $Script:DragStartPoint = $null
     })
 
     # Start drag once mouse moves past system threshold
     $Tab.Add_PreviewMouseMove({
         param($s, $e)
-        if ($e.LeftButton -ne 'Pressed' -or $null -eq $Script:DragSource) { return }
+        if ($e.LeftButton -ne 'Pressed' -or $null -eq $Script:DragSource -or $null -eq $Script:DragStartPoint -or $Script:DragInProgress) { return }
 
         $minX = [System.Windows.SystemParameters]::MinimumHorizontalDragDistance
         $minY = [System.Windows.SystemParameters]::MinimumVerticalDragDistance
-        $pos  = $e.GetPosition($s)
-        if ([Math]::Abs($pos.X) -lt $minX -and [Math]::Abs($pos.Y) -lt $minY) { return }
+        $pos  = $e.GetPosition($Window)
+        if ([Math]::Abs($pos.X - $Script:DragStartPoint.X) -lt $minX -and [Math]::Abs($pos.Y - $Script:DragStartPoint.Y) -lt $minY) { return }
 
         $data = [System.Windows.DataObject]::new("ShellTabItem", $Script:DragSource)
-        [System.Windows.DragDrop]::DoDragDrop($Script:DragSource, $data, 'Move') | Out-Null
+        $Script:DragInProgress = $true
+        try {
+            [System.Windows.DragDrop]::DoDragDrop($Script:DragSource, $data, 'Move') | Out-Null
+        }
+        finally {
+            $Script:DragInProgress = $false
+            $Script:DragSource = $null
+            $Script:DragStartPoint = $null
+        }
     })
 
     # Highlight the tab being dragged over
@@ -698,7 +856,7 @@ function Invoke-ReloadModules {
 
     $n = 0
     foreach ($meta in $sorted) {
-        Set-Status "Loading $($meta.Title)…"
+        Set-Status "Loading $($meta.Title)..."
         $tab = Import-ModuleTab -Meta $meta
         [void]$TabControl.Items.Add($tab)
         $n++
@@ -706,13 +864,13 @@ function Invoke-ReloadModules {
 
     if ($TabControl.Items.Count -gt 0) { $TabControl.SelectedIndex = 0 }
     $TxtTabCount.Text = "$n tab(s) loaded"
-    Set-Status "✓ $n module(s) ready" "#A6E3A1"
+    Set-Status "OK: $n module(s) ready" "#A6E3A1"
 
     Sync-TabOrder   # persist the order that was just established
 }
 
 # ─────────────────────────────────────────────────────────────
-# ADD TAB FROM FILE PICKER  (＋ button)
+# ADD TAB FROM FILE PICKER  (➕ button)
 # ─────────────────────────────────────────────────────────────
 function Add-TabFromFile {
     $ofd                    = [System.Windows.Forms.OpenFileDialog]::new()

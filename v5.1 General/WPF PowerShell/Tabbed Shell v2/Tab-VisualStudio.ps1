@@ -26,9 +26,10 @@ function Get-ModuleUI {
     }
 
     function Get-VSWherePath {
+        $programFilesX86 = [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
         $default = Join-Path $env:ProgramFiles 'Microsoft Visual Studio\Installer\vswhere.exe'
-        if (-not (Test-Path $default) -and $env:ProgramFiles(x86)) {
-            $default = Join-Path $env:ProgramFiles(x86) 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (-not (Test-Path $default) -and $programFilesX86) {
+            $default = Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe'
         }
         if (Test-Path $default) { return $default }
         return $null
@@ -36,23 +37,34 @@ function Get-ModuleUI {
 
     function Get-VisualStudioInstances {
         $vswhere = Get-VSWherePath
-        $instances = @()
+        $instances = [System.Collections.Generic.List[object]]::new()
         if ($vswhere) {
             try {
                 $json = & $vswhere -all -prerelease -format json 2>$null
                 if ($json) {
                     $records = $json | ConvertFrom-Json
                     foreach ($instance in $records) {
+                        $packages = @($instance.packages)
+                        $workloads = @($packages | Where-Object { $_.type -eq 'Workload' } | ForEach-Object { $_.id })
+                        $components = @($packages | Where-Object { $_.type -like '*Component*' } | ForEach-Object { $_.id })
+                        $extensions = @($packages | Where-Object { $_.isExtension -eq $true } | ForEach-Object { $_.id })
+                        $displayVersion = if ($instance.catalog.productDisplayVersion) { $instance.catalog.productDisplayVersion } else { $instance.installationVersion }
                         [void]$instances.Add([PSCustomObject]@{
-                            Name             = $instance.displayName
-                            ChannelId        = $instance.channelId
-                            ProductId        = $instance.productId
-                            Version          = $instance.installationVersion
-                            Path             = $instance.installationPath
-                            ProductLine      = $instance.productLine || ''
-                            IsPrerelease     = if ($instance.isPrerelease) { 'Yes' } else { 'No' }
-                            InstallDate      = ($instance.installationDate -as [datetime]).ToString('yyyy-MM-dd HH:mm:ss')
-                            CatalogBuild     = $instance.catalog.buildVersion
+                            Name                = if ([string]::IsNullOrWhiteSpace($instance.displayName)) { $instance.productId } else { $instance.displayName }
+                            Edition             = $instance.productId
+                            ChannelId           = $instance.channelId
+                            ProductId           = $instance.productId
+                            DisplayVersion      = $displayVersion
+                            Version             = $instance.installationVersion
+                            Path                = $instance.installationPath
+                            ProductLine         = if ([string]::IsNullOrWhiteSpace($instance.productLine)) { '' } else { $instance.productLine }
+                            IsPrerelease        = if ($instance.isPrerelease) { 'Yes' } else { 'No' }
+                            InstallDate         = ($instance.installationDate -as [datetime]).ToString('yyyy-MM-dd HH:mm:ss')
+                            CatalogBuild        = $instance.catalog.buildVersion
+                            Workloads           = if ($workloads) { ($workloads -join ', ') } else { 'None' }
+                            Components          = if ($components) { ($components -join ', ') } else { 'None' }
+                            Extensions          = if ($extensions) { ($extensions -join ', ') } else { 'None' }
+                            PackageCount        = $packages.Count
                         })
                     }
                 }
@@ -61,9 +73,10 @@ function Get-ModuleUI {
         }
 
         if (-not $instances) {
+            $programFilesX86 = [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
             $searchRoot = Join-Path $env:ProgramFiles 'Microsoft Visual Studio'
-            if (-not (Test-Path $searchRoot) -and $env:ProgramFiles(x86)) {
-                $searchRoot = Join-Path $env:ProgramFiles(x86) 'Microsoft Visual Studio'
+            if (-not (Test-Path $searchRoot) -and $programFilesX86) {
+                $searchRoot = Join-Path $programFilesX86 'Microsoft Visual Studio'
             }
             if (Test-Path $searchRoot) {
                 $paths = Get-ChildItem -Path $searchRoot -Directory -ErrorAction SilentlyContinue
@@ -90,11 +103,11 @@ function Get-ModuleUI {
             [void]$instances.Add([PSCustomObject]@{ Name = 'No Visual Studio installations found'; ChannelId=''; ProductId=''; Version=''; Path=''; ProductLine=''; IsPrerelease=''; InstallDate=''; CatalogBuild='' })
         }
 
-        return $instances
+        return $instances | Sort-Object Version -Descending
     }
 
     function Get-VSSettingsFiles {
-        $settings = @()
+        $settings = [System.Collections.Generic.List[object]]::new()
         $searchPaths = Get-ChildItem -Path "$env:USERPROFILE\Documents\Visual Studio *\Settings" -Directory -ErrorAction SilentlyContinue
         foreach ($folder in $searchPaths) {
             foreach ($file in Get-ChildItem -Path $folder.FullName -Filter '*.vssettings' -File -ErrorAction SilentlyContinue) {
@@ -133,15 +146,15 @@ function Get-ModuleUI {
     }
 
     function Get-VSExtensions {
-        $extensions = @()
+        $extensions = [System.Collections.Generic.List[object]]::new()
         $instances = Get-VisualStudioInstances
 
         foreach ($instance in $instances) {
             if (-not $instance.Path) { continue }
             $candidateRoots = @(
-                Join-Path $instance.Path 'Common7\IDE\Extensions',
-                Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\$($instance.Version)\Extensions",
-                Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\$($instance.ProductId)\Extensions"
+                (Join-Path $instance.Path 'Common7\IDE\Extensions')
+                (Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\$($instance.Version)\Extensions")
+                (Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\$($instance.ProductId)\Extensions")
             )
             foreach ($root in $candidateRoots) {
                 if (-not (Test-Path $root)) { continue }
@@ -153,6 +166,7 @@ function Get-ModuleUI {
                     $state = if ($folder -match '\.disabled$') { 'Disabled' } else { 'Installed' }
                     [void]$extensions.Add([PSCustomObject]@{
                         Instance          = $instance.Name
+                        InstanceVersion   = $instance.DisplayVersion
                         Name              = $meta.DisplayName
                         Id                = $meta.Id
                         InstalledVersion  = $meta.Version
@@ -171,6 +185,31 @@ function Get-ModuleUI {
         }
 
         return $extensions | Sort-Object Instance, Name
+    }
+
+    function Format-InstanceDetails {
+        param([object]$Instance)
+
+        if (-not $Instance) { return 'Select a Visual Studio installation to view details.' }
+
+        $lines = @(
+            "Name: $($Instance.Name)",
+            "Edition: $($Instance.Edition)",
+            "Display version: $($Instance.DisplayVersion)",
+            "Installation version: $($Instance.Version)",
+            "Channel: $($Instance.ChannelId)",
+            "Product line: $($Instance.ProductLine)",
+            "Install path: $($Instance.Path)",
+            "Install date: $($Instance.InstallDate)",
+            "Prerelease: $($Instance.IsPrerelease)",
+            "Catalog build: $($Instance.CatalogBuild)",
+            "Package count: $($Instance.PackageCount)",
+            "Workloads: $($Instance.Workloads)",
+            "Components: $($Instance.Components)",
+            "Extensions: $($Instance.Extensions)"
+        )
+
+        return $lines -join [Environment]::NewLine
     }
 
     $VSInstances  = Get-VisualStudioInstances
@@ -206,48 +245,70 @@ function Get-ModuleUI {
             </DockPanel>
 
             <Border Background="$($Theme.Surface)" CornerRadius="6" Padding="12" Margin="0,0,0,14">
-                <TextBlock Text="Visual Studio Instances" FontSize="14" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,0,0,10"/>
-                <ListView x:Name="InstanceList" Background="Transparent" BorderThickness="0" Foreground="$($Theme.Text)" FontSize="12" Height="180">
-                    <ListView.View>
-                        <GridView>
-                            <GridViewColumn Header="Name" Width="220" DisplayMemberBinding="{Binding Name}"/>
-                            <GridViewColumn Header="Version" Width="100" DisplayMemberBinding="{Binding Version}"/>
-                            <GridViewColumn Header="Channel" Width="120" DisplayMemberBinding="{Binding ChannelId}"/>
-                            <GridViewColumn Header="Install Path" Width="360" DisplayMemberBinding="{Binding Path}"/>
-                            <GridViewColumn Header="Prerelease" Width="100" DisplayMemberBinding="{Binding IsPrerelease}"/>
-                        </GridView>
-                    </ListView.View>
-                </ListView>
+                <StackPanel>
+                    <TextBlock Text="Visual Studio Instances" FontSize="14" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,0,0,10"/>
+                    <ListView x:Name="InstanceList" Background="Transparent" BorderThickness="0" Foreground="$($Theme.Text)" FontSize="12" Height="180">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Name" Width="220" DisplayMemberBinding="{Binding Name}"/>
+                                <GridViewColumn Header="Display Version" Width="120" DisplayMemberBinding="{Binding DisplayVersion}"/>
+                                <GridViewColumn Header="Full Version" Width="120" DisplayMemberBinding="{Binding Version}"/>
+                                <GridViewColumn Header="Channel" Width="120" DisplayMemberBinding="{Binding ChannelId}"/>
+                                <GridViewColumn Header="Prerelease" Width="90" DisplayMemberBinding="{Binding IsPrerelease}"/>
+                                <GridViewColumn Header="Packages" Width="90" DisplayMemberBinding="{Binding PackageCount}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                    <TextBlock Text="Selected instance details" FontSize="12" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,12,0,8"/>
+                    <TextBox x:Name="TxtInstanceDetails"
+                             Height="170"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"
+                             IsReadOnly="True"
+                             AcceptsReturn="True"
+                             Foreground="$($Theme.Text)"
+                             Background="$($Theme.Background)"
+                             BorderBrush="$($Theme.Border)"
+                             BorderThickness="1"
+                             FontFamily="Consolas"
+                             FontSize="11"/>
+                </StackPanel>
             </Border>
 
             <Border Background="$($Theme.Surface)" CornerRadius="6" Padding="12" Margin="0,0,0,14">
-                <TextBlock Text="Settings Files" FontSize="14" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,0,0,10"/>
-                <ListView x:Name="SettingsList" Background="Transparent" BorderThickness="0" Foreground="$($Theme.Text)" FontSize="12" Height="180">
-                    <ListView.View>
-                        <GridView>
-                            <GridViewColumn Header="Instance" Width="160" DisplayMemberBinding="{Binding Instance}"/>
-                            <GridViewColumn Header="File" Width="220" DisplayMemberBinding="{Binding File}"/>
-                            <GridViewColumn Header="Path" Width="420" DisplayMemberBinding="{Binding Path}"/>
-                            <GridViewColumn Header="Modified" Width="170" DisplayMemberBinding="{Binding Modified}"/>
-                        </GridView>
-                    </GridView>
-                </ListView>
+                <StackPanel>
+                    <TextBlock Text="Settings Files" FontSize="14" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,0,0,10"/>
+                    <ListView x:Name="SettingsList" Background="Transparent" BorderThickness="0" Foreground="$($Theme.Text)" FontSize="12" Height="180">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Instance" Width="160" DisplayMemberBinding="{Binding Instance}"/>
+                                <GridViewColumn Header="File" Width="220" DisplayMemberBinding="{Binding File}"/>
+                                <GridViewColumn Header="Path" Width="420" DisplayMemberBinding="{Binding Path}"/>
+                                <GridViewColumn Header="Modified" Width="170" DisplayMemberBinding="{Binding Modified}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </StackPanel>
             </Border>
 
             <Border Background="$($Theme.Surface)" CornerRadius="6" Padding="12" Margin="0,0,0,0">
-                <TextBlock Text="Extensions" FontSize="14" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,0,0,10"/>
-                <ListView x:Name="ExtensionsList" Background="Transparent" BorderThickness="0" Foreground="$($Theme.Text)" FontSize="12" Height="320">
-                    <ListView.View>
-                        <GridView>
-                            <GridViewColumn Header="Instance" Width="140" DisplayMemberBinding="{Binding Instance}"/>
-                            <GridViewColumn Header="Name" Width="220" DisplayMemberBinding="{Binding Name}"/>
-                            <GridViewColumn Header="Version" Width="120" DisplayMemberBinding="{Binding InstalledVersion}"/>
-                            <GridViewColumn Header="State" Width="110" DisplayMemberBinding="{Binding State}"/>
-                            <GridViewColumn Header="Path" Width="300" DisplayMemberBinding="{Binding Path}"/>
-                            <GridViewColumn Header="URL" Width="260" DisplayMemberBinding="{Binding URL}"/>
-                        </GridView>
-                    </ListView.View>
-                </ListView>
+                <StackPanel>
+                    <TextBlock Text="Extensions" FontSize="14" FontWeight="SemiBold" Foreground="$($Theme.Text)" Margin="0,0,0,10"/>
+                    <ListView x:Name="ExtensionsList" Background="Transparent" BorderThickness="0" Foreground="$($Theme.Text)" FontSize="12" Height="320">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Instance" Width="140" DisplayMemberBinding="{Binding Instance}"/>
+                                <GridViewColumn Header="VS Version" Width="110" DisplayMemberBinding="{Binding InstanceVersion}"/>
+                                <GridViewColumn Header="Name" Width="220" DisplayMemberBinding="{Binding Name}"/>
+                                <GridViewColumn Header="Version" Width="120" DisplayMemberBinding="{Binding InstalledVersion}"/>
+                                <GridViewColumn Header="State" Width="110" DisplayMemberBinding="{Binding State}"/>
+                                <GridViewColumn Header="Path" Width="300" DisplayMemberBinding="{Binding Path}"/>
+                                <GridViewColumn Header="URL" Width="260" DisplayMemberBinding="{Binding URL}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </StackPanel>
             </Border>
 
         </StackPanel>
@@ -259,13 +320,25 @@ function Get-ModuleUI {
     $Control = [Windows.Markup.XamlReader]::Load($Reader)
 
     $InstanceList   = $Control.FindName('InstanceList')
+    $TxtInstanceDetails = $Control.FindName('TxtInstanceDetails')
     $SettingsList   = $Control.FindName('SettingsList')
     $ExtensionsList = $Control.FindName('ExtensionsList')
     $BtnRefresh     = $Control.FindName('BtnRefresh')
 
+    function Update-InstanceDetails {
+        $selected = $InstanceList.SelectedItem
+        if ($TxtInstanceDetails) {
+            $TxtInstanceDetails.Text = Format-InstanceDetails -Instance $selected
+        }
+    }
+
     function Load-Content {
         $InstanceList.Items.Clear()
         foreach ($instance in $VSInstances) { [void]$InstanceList.Items.Add($instance) }
+        if ($InstanceList.Items.Count -gt 0 -and $null -eq $InstanceList.SelectedItem) {
+            $InstanceList.SelectedIndex = 0
+        }
+        Update-InstanceDetails
 
         $SettingsList.Items.Clear()
         foreach ($setting in $VSSettings) { [void]$SettingsList.Items.Add($setting) }
@@ -284,7 +357,10 @@ function Get-ModuleUI {
         foreach ($setting in $freshSettings) { [void]$SettingsList.Items.Add($setting) }
         $ExtensionsList.Items.Clear()
         foreach ($extension in $freshExtensions) { [void]$ExtensionsList.Items.Add($extension) }
+        Update-InstanceDetails
     })
+
+    $InstanceList.Add_SelectionChanged({ Update-InstanceDetails })
 
     Load-Content
     return $Control
